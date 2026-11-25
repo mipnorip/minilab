@@ -62,6 +62,19 @@ docker compose up --build -d
 bash scripts/smoke.sh
 ```
 
+### Desktop-версия для Windows (один exe, без установки)
+
+Тот же функционал одним exe-файлом для ПК без Docker — порт C# + SQLite
+(сборка работает на macOS, Windows не нужна):
+
+```bash
+bash scripts/build-desktop.sh   # → artifacts/EJL-win-x86.zip (exe + руководство)
+bash scripts/run-desktop.sh     # dev-запуск на своей машине
+bash scripts/smoke-desktop.sh   # приёмочный тест (сценарий smoke.sh) против desktop-версии
+```
+
+См. [desktop/README.md](desktop/README.md).
+
 Другие команды:
 
 ```bash
@@ -113,6 +126,8 @@ minilab/
 ├── gateway/                    # nginx: маршрутизация /api/*, статика SPA
 ├── web/                        # React SPA (Vite + TypeScript)
 │   └── src/pages/              # Журналы, Журнал, Конструктор, Материалы, Уведомления, Аудит, Пользователи
+├── desktop/                    # Desktop-версия для Windows 10 x86 (C#, один exe, SQLite)
+│   └── EJL.App/                # ASP.NET Core: 6 модулей = 6 бывших сервиса, SPA вшита в exe
 ├── services/
 │   ├── auth/                   # пользователи, роли, JWT
 │   ├── forms/                  # шаблоны форм + пресеты 12 журналов

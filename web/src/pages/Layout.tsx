@@ -9,6 +9,15 @@ export default function Layout() {
   const navigate = useNavigate();
   const [unread, setUnread] = useState(0);
 
+  const backup = async () => {
+    try {
+      const res = await api.post<{ ok: boolean; path: string }>('/backup');
+      window.alert(`Резервная копия создана:\n${res.path}`);
+    } catch (e) {
+      window.alert(`Не удалось создать резервную копию: ${(e as Error).message}`);
+    }
+  };
+
   useEffect(() => {
     let alive = true;
     const load = () => {
@@ -61,6 +70,13 @@ export default function Layout() {
             </NavLink>
           )}
         </nav>
+        <button
+          className="bell"
+          title="Резервная копия базы данных"
+          onClick={backup}
+        >
+          💾
+        </button>
         <button
           className="bell"
           title="Уведомления"

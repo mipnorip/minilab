@@ -1,0 +1,35 @@
+<Project Sdk="Microsoft.NET.Sdk.Web">
+
+  <PropertyGroup>
+    <TargetFramework>net11.0</TargetFramework>
+    <Nullable>enable</Nullable>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <RootNamespace>EJL</RootNamespace>
+    <AssemblyName>EJL</AssemblyName>
+    <Version>1.0.0</Version>
+    <Product>ЭЖЛ — Электронные журналы лаборатории</Product>
+    <Description>Desktop-версия ЭЖЛ: один exe, SQLite, встроенный веб-сервер и SPA</Description>
+    <!-- при публикации под win-x86 — без консольного окна -->
+    <OutputType Condition="'$(RuntimeIdentifier)' == 'win-x86'">WinExe</OutputType>
+    <!-- SPA из wwwroot вшивается в exe как ресурсы (один файл в артефакте) -->
+    <GenerateEmbeddedFilesManifest>true</GenerateEmbeddedFilesManifest>
+    <!-- один exe в артефакте: без web.config рядом -->
+    <IsTransformWebConfigDisabled>true</IsTransformWebConfigDisabled>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <PackageReference Include="Microsoft.EntityFrameworkCore.Sqlite" Version="11.0.*" />
+    <PackageReference Include="Microsoft.Extensions.FileProviders.Embedded" Version="11.0.*" />
+    <PackageReference Include="System.IdentityModel.Tokens.Jwt" Version="8.*" />
+  </ItemGroup>
+
+  <!-- web/dist копируется в wwwroot скриптом сборки и вшивается в exe;
+       пресеты форм — из Resources; JSON из Resources не дублируется рядом с exe -->
+  <ItemGroup>
+    <Content Remove="wwwroot\**\*.*" />
+    <Content Remove="Resources\**\*.json" />
+    <EmbeddedResource Include="wwwroot\**\*.*" />
+    <EmbeddedResource Include="Resources\**\*.*" />
+  </ItemGroup>
+
+</Project>

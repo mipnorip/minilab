@@ -5,3 +5,12 @@ __pycache__/
 *.pyc
 .DS_Store
 pgdata/
+
+# desktop (.NET)
+desktop/EJL.App/wwwroot/
+desktop/EJL.App/bin/
+desktop/EJL.App/obj/
+desktop/.build/
+artifacts/
+*.db
+*.db-wal

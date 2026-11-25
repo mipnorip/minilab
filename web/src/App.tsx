@@ -1,4 +1,5 @@
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
+import { useEffect } from 'react';
 import type { ReactElement } from 'react';
 import { AuthProvider, useAuth } from './auth';
 import LoginPage from './pages/Login';
@@ -20,6 +21,14 @@ function RequireAuth({ children }: { children: ReactElement }) {
 }
 
 export default function App() {
+  // пульс desktop-приложения: пока окно открыто, сервер жив
+  useEffect(() => {
+    const timer = setInterval(() => {
+      fetch('/api/ping', { method: 'POST' }).catch(() => undefined);
+    }, 5000);
+    return () => clearInterval(timer);
+  }, []);
+
   return (
     <AuthProvider>
       <BrowserRouter>
