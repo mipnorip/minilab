@@ -1,0 +1,95 @@
+name: minilab
+
+x-service-env: &service-env
+  DATABASE_URL: postgresql+psycopg://minilab:minilab@db:5432/minilab
+  JWT_SECRET: ${JWT_SECRET:-dev-jwt-secret}
+  INTERNAL_KEY: ${INTERNAL_KEY:-dev-internal-key}
+  AUTH_URL: http://auth-svc:8001
+  FORMS_URL: http://forms-svc:8002
+  RECORDS_URL: http://records-svc:8003
+  MATERIALS_URL: http://materials-svc:8004
+  SCHEDULER_URL: http://scheduler-svc:8005
+  AUDIT_URL: http://audit-svc:8006
+  DEMO_PASSWORD: ${DEMO_PASSWORD:-demo123}
+
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: minilab
+      POSTGRES_PASSWORD: minilab
+      POSTGRES_DB: minilab
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U minilab -d minilab"]
+      interval: 3s
+      timeout: 3s
+      retries: 30
+
+  auth-svc:
+    build: ./services/auth
+    environment: *service-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  forms-svc:
+    build: ./services/forms
+    environment: *service-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  records-svc:
+    build: ./services/records
+    environment: *service-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  materials-svc:
+    build: ./services/materials
+    environment: *service-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  scheduler-svc:
+    build: ./services/scheduler
+    environment:
+      <<: *service-env
+      SCHED_INTERVAL_SECONDS: ${SCHED_INTERVAL_SECONDS:-60}
+      MATERIAL_EXPIRING_DAYS: ${MATERIAL_EXPIRING_DAYS:-14}
+      DAILY_CHECK_HOUR: ${DAILY_CHECK_HOUR:-12}
+    depends_on:
+      db:
+        condition: service_healthy
+
+  audit-svc:
+    build: ./services/audit
+    environment: *service-env
+    depends_on:
+      db:
+        condition: service_healthy
+
+  web:
+    build: ./web
+    expose:
+      - "8080"
+
+  gateway:
+    build: ./gateway
+    ports:
+      - "${APP_PORT:-8080}:80"
+    depends_on:
+      - auth-svc
+      - forms-svc
+      - records-svc
+      - materials-svc
+      - scheduler-svc
+      - audit-svc
+      - web
+
+volumes:
+  pgdata:
