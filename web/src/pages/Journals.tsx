@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api } from '../api';
+import { useAuth } from '../auth';
 import type { Journal } from '../types';
 import { Badge, ErrorBox, Empty, Loading } from '../ui';
 import { fmtDate, isOverdue } from '../utils';
@@ -70,6 +71,7 @@ function JournalsTable({ journals }: { journals: Journal[] }) {
 }
 
 export default function JournalsPage() {
+  const { user } = useAuth();
   const [journals, setJournals] = useState<Journal[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -95,6 +97,13 @@ export default function JournalsPage() {
             Электронные журналы лаборатории · всего ведётся: {journals.length}
           </p>
         </div>
+        {user?.role === 'admin' && (
+          <div className="actions">
+            <Link to="/journals/new" className="btn btn-primary">
+              + Создать журнал
+            </Link>
+          </div>
+        )}
       </div>
       {my.length > 0 && (
         <>

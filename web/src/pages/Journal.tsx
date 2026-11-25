@@ -12,6 +12,7 @@ import type {
   Revision,
   ReviewLog,
   Template,
+  User,
 } from '../types';
 import { Badge, Empty, ErrorBox, Field, Loading, Modal } from '../ui';
 import { computeFormula } from '../formula';
@@ -364,6 +365,156 @@ function ReviewModal({
   );
 }
 
+/* ---------- участники и настройки журнала (admin) ---------- */
+
+function SettingsModal({
+  journal,
+  onClose,
+  onDone,
+}: {
+  journal: Journal;
+  onClose: () => void;
+  onDone: () => void;
+}) {
+  const [users, setUsers] = useState<User[] | null>(null);
+  const [status, setStatus] = useState(journal.status);
+  const [ownerId, setOwnerId] = useState<number | ''>(journal.owner_id);
+  const [memberIds, setMemberIds] = useState<number[]>(
+    (journal.members || []).map((m) => m.user_id),
+  );
+  const [checkWeeks, setCheckWeeks] = useState(journal.check_period_weeks);
+  const [retention, setRetention] = useState(journal.retention_years);
+  const [daily, setDaily] = useState(journal.daily);
+  const [error, setError] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+
+  useEffect(() => {
+    api
+      .get<User[]>('/auth/users')
+      .then(setUsers)
+      .catch((e) => setError(e.message));
+  }, []);
+
+  const engineers = (users || []).filter((u) => u.role === 'engineer' && u.is_active);
+  const owner = (users || []).find((u) => u.id === ownerId);
+
+  const toggleMember = (id: number) =>
+    setMemberIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    );
+
+  const save = async () => {
+    setError(null);
+    if (!owner) {
+      setError('Выберите ответственного за журнал');
+      return;
+    }
+    setBusy(true);
+    try {
+      await api.patch(`/records/journals/${journal.id}`, {
+        status,
+        owner_id: ownerId,
+        owner_name: owner.full_name,
+        check_period_weeks: checkWeeks,
+        retention_years: retention,
+        daily,
+        members: engineers
+          .filter((u) => memberIds.includes(u.id) && u.id !== ownerId)
+          .map((u) => ({ user_id: u.id, name: u.full_name, role: 'worker' })),
+      });
+      onDone();
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Ошибка');
+    } finally {
+      setBusy(false);
+    }
+  };
+
+  return (
+    <Modal title={`Участники и настройки · ${journal.code}`} onClose={onClose}>
+      {!users ? (
+        <Loading text="Загружаем пользователей…" />
+      ) : (
+        <>
+          <div className="form-grid">
+            <Field label="Статус журнала">
+              <select value={status} onChange={(e) => setStatus(e.target.value)}>
+                <option value="active">ведётся</option>
+                <option value="closed">закрыт (записи не вносятся)</option>
+                <option value="archived">в архиве (только чтение)</option>
+              </select>
+            </Field>
+            <Field label="Ответственный">
+              <select
+                value={ownerId}
+                onChange={(e) => setOwnerId(e.target.value ? Number(e.target.value) : '')}
+              >
+                <option value="">— выберите —</option>
+                {(users || [])
+                  .filter((u) => u.is_active)
+                  .map((u) => (
+                    <option key={u.id} value={u.id}>
+                      {u.full_name} ({u.role_title})
+                    </option>
+                  ))}
+              </select>
+            </Field>
+            <Field label="Периодичность проверки, нед.">
+              <input
+                type="number"
+                value={checkWeeks}
+                onChange={(e) => setCheckWeeks(Number(e.target.value) || 4)}
+              />
+            </Field>
+            <Field label="Срок хранения, лет">
+              <input
+                type="number"
+                value={retention}
+                onChange={(e) => setRetention(Number(e.target.value) || 5)}
+              />
+            </Field>
+          </div>
+          {journal.kind === 'form' && (
+            <label className="checkbox" style={{ marginBottom: 10 }}>
+              <input type="checkbox" checked={daily} onChange={(e) => setDaily(e.target.checked)} />
+              Ежедневный журнал (контроль отсутствия записи)
+            </label>
+          )}
+          <h3>Участники (могут вносить записи)</h3>
+          <p className="subtitle">
+            Ответственный участвует автоматически и дополнительно может закрывать записи.
+          </p>
+          {engineers.length === 0 && <p className="muted">Нет активных инженеров/лаборантов</p>}
+          {engineers.map((u) => (
+            <label
+              key={u.id}
+              className="checkbox"
+              style={{ display: 'inline-flex', marginRight: 16, marginBottom: 6 }}
+            >
+              <input
+                type="checkbox"
+                checked={memberIds.includes(u.id) || u.id === ownerId}
+                disabled={u.id === ownerId}
+                onChange={() => toggleMember(u.id)}
+              />
+              {u.full_name}
+            </label>
+          ))}
+          <ErrorBox message={error} />
+          <div className="row" style={{ justifyContent: 'flex-end', marginTop: 10 }}>
+            <button className="btn" onClick={onClose}>
+              Отмена
+            </button>
+            <button className="btn btn-primary" disabled={busy} onClick={save}>
+              Сохранить
+            </button>
+          </div>
+        </>
+      )}
+    </Modal>
+  );
+}
+
 /* ---------- страница журнала ---------- */
 
 type ModalState =
@@ -373,7 +524,8 @@ type ModalState =
   | { kind: 'review' }
   | { kind: 'receipt' }
   | { kind: 'writeoff' }
-  | { kind: 'inventory' };
+  | { kind: 'inventory' }
+  | { kind: 'settings' };
 
 export default function JournalPage() {
   const { id } = useParams();
@@ -554,6 +706,11 @@ export default function JournalPage() {
           {canReview && (
             <button className="btn" onClick={() => setModal({ kind: 'review' })}>
               ✓ Отметить проверку
+            </button>
+          )}
+          {isAdmin && (
+            <button className="btn" onClick={() => setModal({ kind: 'settings' })}>
+              Участники и настройки
             </button>
           )}
           {journal.kind === 'form' && (
@@ -751,6 +908,9 @@ export default function JournalPage() {
         <HistoryModal record={modal.record} columns={columns} onClose={closeModal} />
       )}
       {modal?.kind === 'review' && <ReviewModal journal={journal} onDone={afterSave} onClose={closeModal} />}
+      {modal?.kind === 'settings' && (
+        <SettingsModal journal={journal} onDone={afterSave} onClose={closeModal} />
+      )}
       {modal?.kind === 'receipt' && (
         <ReceiptModal items={materialItems} onClose={closeModal} onDone={afterSave} />
       )}
