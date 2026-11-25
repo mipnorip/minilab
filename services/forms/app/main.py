@@ -131,7 +131,7 @@ def validate_columns(columns: list) -> list:
             if c.get("auto") not in AUTO_KINDS:
                 raise HTTPException(422, f"Колонка «{title}»: тип auto требует auto=row|date|author")
         if ctype == "formula":
-            formula = str(c.get("formula", "")).strip()
+            formula = str(c.get("formula") or "").strip()
             if not formula:
                 raise HTTPException(422, f"Колонка «{title}»: задайте формулу")
             refs = set(re.findall(r"[A-Za-z_][A-Za-z0-9_]*", formula))
@@ -147,10 +147,10 @@ def validate_columns(columns: list) -> list:
             "title": str(c["title"]).strip(),
             "type": c["type"],
             "required": bool(c.get("required", False)),
-            "unit": str(c.get("unit", "")).strip() or None,
-            "options": [str(o).strip() for o in c.get("options", []) if str(o).strip()] or None,
-            "formula": str(c.get("formula", "")).strip() or None,
-            "ref_code": str(c.get("ref_code", "")).strip() or None,
+            "unit": str(c.get("unit") or "").strip() or None,
+            "options": [str(o).strip() for o in (c.get("options") or []) if str(o).strip()] or None,
+            "formula": str(c.get("formula") or "").strip() or None,
+            "ref_code": str(c.get("ref_code") or "").strip() or None,
             "auto": c.get("auto"),
         }
         for c in columns

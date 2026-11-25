@@ -22,7 +22,17 @@ req() { # req METHOD PATH [TOKEN] [JSON] -> HTTP-код, тело ответа �
   curl "${args[@]}"
 }
 body() { cat "$BODY_FILE"; }
-py() { python3 -c "$1"; }
+py() { python3 -c "$1" 2>/dev/null || echo ""; }
+
+probe() { # probe PATH: 0, когда сервис отвечает (не 502) — до 60 секунд
+  local path="$1" i code
+  for i in $(seq 1 30); do
+    code=$(curl -s -o /dev/null -w '%{http_code}' "$BASE$path")
+    [ "$code" != "502" ] && return 0
+    sleep 2
+  done
+  return 1
+}
 login() {
   req POST /api/auth/login "" "{\"login\":\"$1\",\"password\":\"$PASS\"}" >/dev/null
   body | py "import sys,json;print(json.load(sys.stdin).get('token',''))"
@@ -31,6 +41,9 @@ login() {
 note "== 0. Стек =="
 SPA=$(curl -s -o /dev/null -w '%{http_code}' "$BASE/")
 [ "$SPA" = "200" ] && pass "SPA отдаётся: $BASE" || bad "SPA недоступна (HTTP $SPA)"
+for p in /api/auth/me /api/forms/templates /api/records/journals /api/materials/items /api/notifications/list /api/audit/events; do
+  probe "$p" && pass "сервис отвечает: $p" || bad "сервис недоступен: $p"
+done
 
 note "== 1. Вход =="
 ADMIN=$(login admin)
@@ -45,7 +58,7 @@ done
 note "== 2. Журналы и сиды =="
 req GET /api/records/journals "$ADMIN" >/dev/null
 NJ=$(body | py "import sys,json;print(len(json.load(sys.stdin)))")
-[ "$NJ" -ge 5 ] && pass "журналов в реестре: $NJ (MVP = 5)" || bad "журналов: $NJ"
+[ "$NJ" -ge 16 ] && pass "журналов в реестре: $NJ (16 из согласованного перечня)" || bad "журналов: $NJ"
 req GET /api/forms/templates "$ADMIN" >/dev/null
 NT=$(body | py "import sys,json;print(len(json.load(sys.stdin)))")
 [ "$NT" -ge 12 ] && pass "шаблонов форм: $NT (12 пресетов)" || bad "шаблонов: $NT"
@@ -114,6 +127,20 @@ note "== 8. Аудит =="
 req GET "/api/audit/events?limit=100" "$QM" >/dev/null
 NEV=$(body | py "import sys,json;print(len(json.load(sys.stdin)))")
 [ "$NEV" -ge 10 ] && pass "событий в журнале аудита: $NEV" || bad "событий аудита: $NEV"
+
+note "== 9. Конструктор форм (регрессия: колонки с null-полями) =="
+req GET /api/forms/templates "$ADMIN" >/dev/null
+TID=$(body | py "import sys,json;ts=json.load(sys.stdin);print(next((t['id'] for t in ts if t['code']=='T-SMOKE'),0))")
+[ -z "$TID" ] && TID=0
+if [ "$TID" = "0" ]; then
+  CODE=$(req POST /api/forms/templates "$ADMIN" '{"code":"T-SMOKE","title":"Смоук-шаблон","is_preset":false,"columns":[{"key":"name","title":"Наименование","type":"text","required":true,"options":null,"unit":null},{"key":"qty","title":"Количество","type":"number","unit":"шт","options":null}]}')
+  TID=$(body | py "import sys,json;print(json.load(sys.stdin).get('id',''))")
+  [ "$CODE" = "201" ] && pass "пользовательский шаблон T-SMOKE создан" || bad "создание шаблона: HTTP $CODE — $(body)"
+else
+  pass "шаблон T-SMOKE уже есть (повторный прогон)"
+fi
+CODE=$(req POST "/api/forms/templates/$TID/versions" "$ADMIN" '{"columns":[{"key":"name","title":"Наименование","type":"text","required":true,"options":null,"unit":null},{"key":"qty","title":"Количество","type":"number","unit":"шт","options":null},{"key":"note","title":"Примечание","type":"text","options":null}]}')
+[ "$CODE" = "201" ] && pass "новая версия шаблона сохранена (null-поля колонок)" || bad "версия шаблона: HTTP $CODE — $(body)"
 
 note "================================"
 note "Пройдено: $OK   Провалено: $BAD"
